@@ -1,0 +1,110 @@
+services:
+  mariadb:
+    image: mariadb:latest
+    container_name: mariadb
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_USER: mrdbuser
+      MYSQL_PASSWORD: mrdbpw
+      MYSQL_DATABASE: mrdb
+    ports:
+      - "3306:3306"
+    command: >
+      --log-bin=mysql-bin
+      --server-id=1
+      --binlog-format=row
+      --expire-logs-days=10
+      --default-authentication-plugin=mysql_native_password
+    networks:
+      - comb_network
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-proot"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+ 
+  mongodb:
+    image: mongo:latest
+    container_name: mongodb
+    ports:
+      - "27017:27017"
+    command: mongod --replSet myrs
+    networks:
+      - comb_network
+    healthcheck:
+      test: echo 'db.runCommand("ping").ok' | mongosh localhost:27017/admin --quiet
+      interval: 5s
+      timeout: 5s
+      retries: 20
+ 
+  postgres:
+    image: debezium/postgres:15
+    container_name: postgres
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: inventory
+    volumes:
+      - ./pg_hba.conf:/etc/postgresql/pg_hba.conf
+      - ./postgresql.conf:/etc/postgresql/postgresql.conf
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - comb_network
+ 
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:2019-latest
+    container_name: sqlserver
+    ports:
+      - "1433:1433"
+    environment:
+      ACCEPT_EULA: "Y"
+      SA_PASSWORD: "Password123!"
+      MSSQL_AGENT_ENABLED: "true"
+      MSSQL_PID: "Standard"
+    volumes:
+      - sqlserver-data:/var/opt/mssql
+    healthcheck:
+      test: /opt/mssql-tools18/bin/sqlcmd -S localhost -U SA -P "Password123!" -Q "SELECT 1" || exit 1
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - comb_network
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+  mysql:
+      image: mysql:8.0
+      container_name: mysql
+      ports:
+        - "3307:3306"
+      environment:
+        MYSQL_ROOT_PASSWORD: root
+        MYSQL_USER: mysqluser
+        MYSQL_PASSWORD: mysqlpw
+        MYSQL_DATABASE: inventory
+      command: --default-authentication-plugin=mysql_native_password
+      volumes:
+        - ./mysql.cnf:/etc/mysql/conf.d/mysql.cnf
+        - mysql-data:/var/lib/mysql
+      healthcheck:
+        test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-pdebezium"]
+        interval: 10s
+        timeout: 5s
+        retries: 5
+  
+networks:
+  comb_network:
+    external: True
+ 
+volumes:
+  sqlserver-data:
+  postgres-data:
+  mysql-data:
+ 

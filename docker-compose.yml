@@ -1,0 +1,67 @@
+services:
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.3.0
+    container_name: zookeeper
+    ports:
+      - "2181:2181"
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    networks:
+      - debezium-network
+ 
+  kafka:
+    image: confluentinc/cp-kafka:7.3.0
+    container_name: kafka
+    ports:
+      - "9092:9092"
+    depends_on:
+      - zookeeper
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_JMX_PORT: 9101
+      KAFKA_JMX_HOSTNAME: localhost
+      KAFKA_HEAP_OPTS: "-Xmx512M -Xms512M"
+    networks:
+      - debezium-network
+ 
+ 
+  flask_api:
+    image: brundav600/cdc_debezium:latest
+    ports:
+      - "5000:5000"
+    environment:
+      - FLASK_ENV=development
+      - KAFKA_BROKER=kafka:29092
+    networks:
+      - debezium-network
+ 
+  connect:
+    image: debezium/connect:2.3
+    container_name: connect
+    ports:
+      - "8083:8083"
+    depends_on:
+      - kafka
+    environment:
+      GROUP_ID: 1
+      BOOTSTRAP_SERVERS: kafka:29092
+      CONFIG_STORAGE_TOPIC: connect_configs
+      OFFSET_STORAGE_TOPIC: connect_offsets
+      STATUS_STORAGE_TOPIC: connect_statuses
+      CONNECT_PLUGIN_PATH: /kafka/connect
+      HEAP_OPTS: "-Xms256M -Xmx512M"
+    # This allows the container to access the host machine
+    # extra_hosts:
+    #   - "host.docker.internal:host-gateway"
+    networks:
+      - debezium-network
+ 
+networks:
+  debezium-network:
+    external: True
